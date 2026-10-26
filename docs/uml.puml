@@ -1,0 +1,201 @@
+@startuml
+' 5 lapos húzós póker — osztálydiagram
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+hide empty members
+
+package kartya.model {
+    enum Szin {
+        TREFF
+        KARO
+        KOR
+        PIKK
+        + megnevezes() : String
+    }
+
+    enum Ertek {
+        KETTO, HAROM, …, KIRALY, ASZ
+        + szamErtek() : int
+        + megnevezes() : String
+    }
+
+    class Kartya <<record>> {
+        + szin() : Szin
+        + ertek() : Ertek
+        + compareTo(masik : Kartya) : int
+    }
+
+    class KartyaRendezesek <<utility>> {
+        + {static} SZIN_SZERINT : Comparator<Kartya>
+        + {static} ERTEK_SZERINT : Comparator<Kartya>
+        + {static} pokerKiertekeles(lapok : Collection<Kartya>) : Comparator<Kartya>
+    }
+
+    class Pakli {
+        - lapok : Deque<Kartya>
+        - legkisebbErtek : Ertek
+        + {static} francia52() : Pakli
+        + {static} magyar32() : Pakli
+        + kever(random : Random)
+        + huz() : Kartya
+        + meret() : int
+        + ures() : boolean
+        + legkisebbErtek() : Ertek
+        + lapok() : List<Kartya>
+    }
+
+    class Kez {
+        + {static} MAX_LAPSZAM = 5
+        - lapok : List<Kartya>
+        + hozzaad(k : Kartya)
+        + eltavolit(k : Kartya) : boolean
+        + tartalmaz(k : Kartya) : boolean
+        + meret() : int
+        + urit()
+        + lapok() : List<Kartya>
+        + rendez(c : Comparator<Kartya>)
+        + rendezve(c : Comparator<Kartya>) : List<Kartya>
+        + csoportositSzinSzerint() : Map<Szin, List<Kartya>>
+    }
+
+    interface "Comparable<Kartya>" as ComparableKartya
+}
+
+package kartya.ertekeles {
+    enum KezTipus {
+        MAGAS_LAP
+        EGY_PAR
+        KET_PAR
+        DRILL
+        SOR
+        FLUSH
+        FULL
+        POKER
+        FLUSH_SOR
+    }
+
+    class KezErtek <<record>> {
+        + tipus() : KezTipus
+        + dontoErtekek() : List<Ertek>
+        + compareTo(masik : KezErtek) : int
+    }
+
+    class KezErtekelo {
+        - legkisebbErtek : Ertek
+        + ertekel(kez : Kez) : KezErtek
+        + ertekel(lapok : Collection<Kartya>) : KezErtek
+        + legkisebbErtek() : Ertek
+    }
+
+    interface "Comparable<KezErtek>" as ComparableKezErtek
+}
+
+package kartya.strategia {
+    interface Strategia <<functional>> {
+        + {static} MAX_ELDOBAS = 3
+        + eldobandok(kez : Kez) : Set<Kartya>
+    }
+
+    class OvatosStrategia
+    class KockazatosStrategia
+
+    class KezElemzes <<package-private>> {
+        ~ {static} parositatlanok(kez : Kez) : Set<Kartya>
+        ~ {static} legalacsonyabbak(kez : Kez, darab : int) : Set<Kartya>
+        ~ {static} szinhuzas(kez : Kez, minimum : int) : Optional<Set<Kartya>>
+        ~ {static} sorhuzas(kez : Kez, legkisebb : Ertek) : Optional<Kartya>
+    }
+}
+
+package kartya.jatekos {
+    abstract class Jatekos <<sealed>> {
+        - nev : String
+        - kez : Kez
+        + nev() : String
+        + kez() : Kez
+        + {abstract} eldobandok() : Set<Kartya>
+    }
+
+    class GepiJatekos <<final>> {
+        - strategia : Strategia
+        + eldobandok() : Set<Kartya>
+    }
+
+    class EmberiJatekos <<final>> {
+        - konzol : Konzol
+        + eldobandok() : Set<Kartya>
+        ~ {static} sorszamokFeldolgozasa(sor : String, lapszam : int) : Set<Integer>
+    }
+}
+
+package kartya.jatek {
+    class Konzol {
+        + kiir(sor : String)
+        + kerdez(kerdes : String) : Optional<String>
+    }
+
+    class Jatek {
+        - jatekosok : List<Jatekos>
+        - pakliGyar : Supplier<Pakli>
+        - random : Random
+        + futtat()
+        + tabla() : Eredmenytabla
+    }
+
+    class Kor {
+        ~ lejatszik() : KorEredmeny
+    }
+
+    class KorEredmeny <<record>> {
+        + kezErtekek() : Map<Jatekos, KezErtek>
+        + nyertesek() : List<Jatekos>
+    }
+
+    class Eredmenytabla {
+        - pontok : LinkedHashMap<Jatekos, Integer>
+        + pontotAd(j : Jatekos)
+        + pontszam(j : Jatekos) : int
+        + sorok() : List<String>
+    }
+}
+
+class Main {
+    + {static} main(args : String[])
+}
+
+Kartya ..|> ComparableKartya
+Kartya --> Szin
+Kartya --> Ertek
+KartyaRendezesek ..> Kartya : rendez
+Pakli o-- "0..52" Kartya
+Kez o-- "0..5" Kartya
+
+KezErtek ..|> ComparableKezErtek
+KezErtek --> KezTipus
+KezErtekelo ..> Kez : értékel
+KezErtekelo ..> KezErtek : létrehoz
+KezErtekelo ..> KartyaRendezesek : használ
+
+OvatosStrategia ..|> Strategia
+KockazatosStrategia ..|> Strategia
+OvatosStrategia --> KezErtekelo
+KockazatosStrategia --> KezErtekelo
+OvatosStrategia ..> KezElemzes
+KockazatosStrategia ..> KezElemzes
+
+GepiJatekos --|> Jatekos
+EmberiJatekos --|> Jatekos
+Jatekos *-- "1" Kez
+GepiJatekos --> "1" Strategia
+EmberiJatekos --> Konzol
+
+Jatek o-- "2..*" Jatekos
+Jatek *-- Eredmenytabla
+Jatek --> KezErtekelo
+Jatek --> Konzol
+Jatek ..> Kor : körönként létrehoz
+Kor --> Pakli
+Kor ..> KorEredmeny : visszaad
+Main ..> Jatek : összerak
+
+@enduml
